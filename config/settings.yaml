@@ -1,0 +1,122 @@
+# Bhav screener settings. Paths are relative to the project root.
+# Every key is optional; missing keys fall back to the defaults in src/bhav_screener/config.py.
+
+data:
+  dir: data
+  # History window in TRADING days (about 5 per week). Converted to calendar days for the backfill.
+  # Must exceed the longest SMA by a margin so the 200 SMA exists on many days, not only the last few.
+  history_trading_days: 260
+  # Layer 3 refuses to run when the newest stored day is older than this many calendar days (0 = no check).
+  max_data_age_days: 4
+  request_delay_seconds: 0.5
+  # Keep the raw NSE zip files next to the parquet files.
+  keep_raw: false
+  # NSE UDiFF cash-market bhavcopy. {date:%Y%m%d} is replaced by the trading date.
+  url_template: "https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_{date:%Y%m%d}_F_0000.csv.zip"
+  user_agent: Mozilla/5.0
+  timeout_seconds: 30
+  # A 404 within this many days of today is not cached as a holiday (NSE may not have published yet).
+  recent_days: 3
+  # All layer results go to <results_dir>/layer2, layer3 and layer4 (plan JSON + report), relative to `dir`.
+  results_dir: results
+  # Per-layer status JSON files (consumed by the next step), relative to `dir`.
+  status_dir: status
+
+universe:
+  # Only the EQ series is used for positional trading.
+  eq_only: true
+  # Empty list = all EQ symbols. Or list some, e.g. [RELIANCE, TCS].
+  symbols: []
+  # CSV with columns symbol,industry (industry feeds the sector cap). Set "" to use all EQ symbols.
+  # It is checked automatically and re-downloaded from `index_url` when missing or older than `refresh_days`.
+  universe_file: config/universe_nifty200.csv
+  index_url: "https://www.niftyindices.com/IndexConstituent/ind_nifty200list.csv"
+  # A download with fewer symbols than this is rejected.
+  min_index_symbols: 150
+  refresh_days: 7
+  # A gap between prev_close and the earlier close larger than this fraction is treated as a
+  # split/bonus and earlier prices are adjusted. Smaller gaps (dividends) are ignored.
+  corporate_action_threshold: 0.05
+  # Liquidity filters. 0 disables a filter.
+  min_close: 50
+  max_close: 0
+  min_avg_volume: 200000
+  min_avg_turnover: 20000000
+  liquidity_window: 20
+
+scanner:
+  # Trend: close must be above these simple moving averages (trading days).
+  sma_periods: [20, 50, 200]
+  require_close_above_smas: [50, 200]
+  # Breakout: close above the highest high of the previous N days.
+  breakout_lookback: 20
+  # Volume: today's volume vs its average over `liquidity_window`.
+  volume_multiple: 1.5
+  # Momentum.
+  rsi_period: 14
+  rsi_min: 55
+  rsi_max: 80
+  # Stay close to the 52-week (252 day) high; max % below the high.
+  max_pct_below_52w_high: 15
+  # Volatility used to size stops.
+  atr_period: 14
+  # ATR as % of close must stay inside this band.
+  min_atr_pct: 1.5
+  max_atr_pct: 6.0
+  # Setups to look for: breakout and/or pullback.
+  setups: [breakout, pullback]
+  # Pullback: price dipped to the moving average (tolerance %) after falling at least
+  # pullback_min_depth_pct from its high of the last pullback_lookback days, then closed back above it.
+  pullback_ma: 20
+  pullback_tolerance_pct: 2.0
+  pullback_min_depth_pct: 3.0
+  pullback_lookback: 10
+  # Structural stop (chart first, never an arbitrary %):
+  #   breakout -> below the lowest low of the last stop_lookback_breakout days (base floor)
+  #   pullback -> below the lowest low of the last stop_lookback_pullback days (dip low)
+  # minus stop_atr_buffer x ATR so ordinary wicks do not tag it.
+  stop_lookback_breakout: 7
+  stop_lookback_pullback: 10
+  stop_atr_buffer: 0.15
+  # The stop must sit at least this many ATRs below entry (outside daily noise).
+  min_stop_atr: 0.5
+  # A setup whose structural stop is wider than this % of entry is skipped, not tightened.
+  max_stop_pct: 6.5
+  # Relative strength: return over rs_lookback days, ranked 0-100 across the whole universe.
+  rs_lookback: 126
+  min_rs_score: 0
+  # Window (trading days) for the "52-week" high.
+  high_52w_days: 252
+
+risk:
+  # Target = entry + reward_risk * (entry - stop).
+  reward_risk: 2.0
+  # Funding order: stop_pct = tightest structural stop first (most shares per rupee of risk),
+  # RS score breaks ties; rs_score = strongest relative strength first.
+  rank_by: stop_pct
+  # Hard caps in INR: risk of one trade (qty x risk per share) and total new risk per day.
+  # Small starting capital (INR 10,000) for the first few days of paper/live testing.
+  # Quantity = max_risk_per_trade_inr / (entry - stop), so hitting the chart stop costs the planned rupees.
+  max_risk_per_trade_inr: 150
+  max_daily_risk_inr: 500
+  capital: 10000
+  # A single position's value may not exceed this % of capital.
+  max_position_pct: 25
+  # 4 positions x 25% = 100% of capital, so the plan can never exceed the money you have.
+  max_positions: 4
+  # Max positions from the same sector/industry.
+  max_per_sector: 2
+
+intraday:
+  # true = same-session (intraday) trades; false = positional trades using the structural stops above.
+  enabled: true
+  # Stop distance = stop_atr x ATR (daily swing lows are too far away for a one-day trade).
+  stop_atr: 0.6
+  reward_risk: 1.5
+  # The target must be reachable in one session: target distance <= max_target_atr x ATR.
+  max_target_atr: 1.2
+  # Skip setups whose stop is wider than this % of entry.
+  max_stop_pct: 3.0
+  # Written on every approved trade in the plan so execution never leaves an overnight position.
+  exit_policy: EOD_MANDATORY_CLOSE
+  square_off_time: "15:15"
