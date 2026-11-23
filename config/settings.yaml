@@ -8,6 +8,8 @@ data:
   history_trading_days: 260
   # Layer 3 refuses to run when the newest stored day is older than this many calendar days (0 = no check).
   max_data_age_days: 4
+  # IST time after which today's bhavcopy is fetched. Earlier runs use the last working day only.
+  publish_after_time: "19:00"
   request_delay_seconds: 0.5
   # Keep the raw NSE zip files next to the parquet files.
   keep_raw: false

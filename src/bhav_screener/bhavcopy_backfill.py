@@ -1,5 +1,5 @@
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pyarrow.parquet as pq
@@ -10,6 +10,8 @@ from bhav_screener.utils.bhavcopy_file_parser import BhavcopyFileParser
 from bhav_screener.utils.config import Settings, load_settings
 from bhav_screener.utils.status import write_status
 from bhav_screener.utils.universe import NiftyUniverse
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 # Columns stored in parquet; the parser also keeps many raw NSE columns we do not need.
 STORED_COLUMNS = [
@@ -49,7 +51,7 @@ class BhavcopyBackfill:
     def run(self, days_back: int | None = None, end: date | None = None) -> dict[str, int]:
         """Backfill `days_back` calendar days up to `end` (default: settings window up to today)."""
         days_back = days_back if days_back is not None else self.settings.data.history_calendar_days
-        end = end or date.today()
+        end = end or self.latest_publishable_day()
         stats = {"saved": 0, "cached": 0, "holidays": 0, "failed": 0}
         try:
             for offset in range(days_back, -1, -1):
@@ -76,6 +78,17 @@ class BhavcopyBackfill:
                 last_stored_date=self._last_stored_date(),
             )
         return stats
+
+    def latest_publishable_day(self, now: datetime | None = None) -> date:
+        """Today once NSE has published (publish_after_time IST), else the previous weekday."""
+        now = now.astimezone(IST) if now else datetime.now(IST)
+        hour, minute = map(int, self.settings.data.publish_after_time.split(":"))
+        day = now.date()
+        if (now.hour, now.minute) < (hour, minute):
+            day -= timedelta(days=1)
+        while day.weekday() >= 5:
+            day -= timedelta(days=1)
+        return day
 
     def _last_stored_date(self) -> str | None:
         files = sorted(self.parquet_dir.glob("*.parquet"))

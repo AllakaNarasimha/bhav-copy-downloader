@@ -64,6 +64,8 @@ flowchart TD
 
 A failed day makes the pipeline's download step fail, so Layer 2 never runs on partial data.
 
+The window ends at today only after `data.publish_after_time` (19:00 IST), when NSE has published the file. Before that, it ends at the last working day, so today's file is never requested. Weekends are skipped.
+
 ### Universe
 
 ```mermaid

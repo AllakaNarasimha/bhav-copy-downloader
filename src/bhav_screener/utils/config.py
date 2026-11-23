@@ -18,6 +18,8 @@ class DataConfig:
     history_trading_days: int = 260
     # Layer 3 fails when the newest stored day is older than this many calendar days (0 = no check).
     max_data_age_days: int = 4
+    # IST time after which today's bhavcopy is treated as published; before it, only earlier days are fetched.
+    publish_after_time: str = "19:00"
     request_delay_seconds: float = 0.5
     keep_raw: bool = False
     url_template: str = (
@@ -167,6 +169,10 @@ class Settings:
             time.strptime(self.intraday.square_off_time, "%H:%M")
         except ValueError:
             raise ValueError(f"square_off_time {self.intraday.square_off_time!r} must look like '15:15'")
+        try:
+            time.strptime(self.data.publish_after_time, "%H:%M")
+        except ValueError:
+            raise ValueError(f"publish_after_time {self.data.publish_after_time!r} must look like '19:00'")
         unknown = set(self.scanner.setups) - {"breakout", "pullback"}
         if unknown:
             raise ValueError(f"Unknown setups {sorted(unknown)}; use 'breakout' and/or 'pullback'")
